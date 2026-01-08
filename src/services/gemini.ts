@@ -3,7 +3,7 @@ import { logger } from "../logger";
 import type { ConversationContext, IntentResult, PlacesEventsData } from "../types/context";
 
 let genAI: GoogleGenAI | null = null;
-let model: any = null;
+const model = "gemini-2.0-flash";
 
 export function initialize(): void {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
@@ -16,7 +16,6 @@ export function initialize(): void {
   try {
     genAI = new GoogleGenAI({ apiKey });
     // The SDK's type definitions may not expose getGenerativeModel; cast to any to access it.
-    model = (genAI as any).getGenerativeModel({ model: "gemini-2.0-flash" });
     logger.log("Gemini service initialized successfully", "server");
   } catch (error) {
     logger.error(`Failed to initialize Gemini: ${error}`, "server");
@@ -28,30 +27,30 @@ export async function extractIntent(
   prompt: string,
   context: ConversationContext
 ): Promise<IntentResult> {
-  if (!model) {
+  if (!model || !genAI) {
     throw new Error("Gemini model not initialized. Call initialize() first.");
   }
 
   const systemInstruction = `You are an intent extraction system. Your ONLY job is to analyze user queries and extract structured information. Do NOT answer the user's question. Do NOT provide recommendations. Do NOT be helpful in answering.
 
-Your task:
-1. Identify the user's intent (e.g., "recommendation", "event_search", "location_info", "restaurant_search", "attraction_search", etc.)
-2. Identify missing required information (e.g., "location", "radius", "date", "category", etc.)
-3. Extract any data you can find (location mentions, dates, preferences, etc.)
-4. Provide confidence level (0.0 to 1.0)
+    Your task:
+    1. Identify the user's intent (e.g., "recommendation", "event_search", "location_info", "restaurant_search", "attraction_search", etc.)
+    2. Identify missing required information (e.g., "location", "radius", "date", "category", etc.)
+    3. Extract any data you can find (location mentions, dates, preferences, etc.)
+    4. Provide confidence level (0.0 to 1.0)
 
-Respond ONLY with valid JSON in this exact format:
-{
-  "intent": "string",
-  "missingFields": ["string"],
-  "confidence": 0.0-1.0,
-  "extractedData": {
-    "location": "string or null",
-    "radius": "number or null",
-    "date": "string or null",
-    "category": "string or null"
-  }
-}`;
+    Respond ONLY with valid JSON in this exact format:
+    {
+      "intent": "string",
+      "missingFields": ["string"],
+      "confidence": 0.0-1.0,
+      "extractedData": {
+        "location": "string or null",
+        "radius": "number or null",
+        "date": "string or null",
+        "category": "string or null"
+      }
+    }`;
 
   const contextInfo = context.location
     ? `User location context: ${context.location.city || "unknown"}, radius: ${context.location.radius || "unknown"} km`
@@ -59,19 +58,22 @@ Respond ONLY with valid JSON in this exact format:
 
   const fullPrompt = `${systemInstruction}
 
-Context: ${contextInfo}
+  Context: ${contextInfo}
 
-User message: "${prompt}"
+  User message: "${prompt}"
 
-Respond with JSON only:`;
+  Respond with JSON only:`;
 
   try {
-    const result = await model.generateContent(fullPrompt);
-    const response = result.response;
-    const text = response.text();
+    const result = await genAI.models.generateContent({
+      model,
+      contents: fullPrompt
+    });
+
+    const response = result.text;
 
     // Extract JSON from response (handle markdown code blocks if present)
-    let jsonText = text.trim();
+    let jsonText = response?.trim() || "";
     if (jsonText.startsWith("```json")) {
       jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     } else if (jsonText.startsWith("```")) {
@@ -106,7 +108,7 @@ Respond with JSON only:`;
 }
 
 export async function generateClarification(missingFields: string[]): Promise<string> {
-  if (!model) {
+  if (!model || !genAI) {
     throw new Error("Gemini model not initialized. Call initialize() first.");
   }
 
@@ -119,9 +121,13 @@ Example format: "I'd be happy to help! Could you please tell me your location an
 Respond with only the clarification question, nothing else:`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text().trim();
+    const result = await genAI.models.generateContent({
+      model,
+      contents: prompt
+    });
+
+    const response = result.text;
+    return response?.trim() || "";
   } catch (error) {
     logger.error(`Failed to generate clarification: ${error}`, "command");
     // Fallback clarification
@@ -133,7 +139,7 @@ export async function formatResponse(
   data: PlacesEventsData,
   query: string
 ): Promise<string> {
-  if (!model) {
+  if (!model || !genAI) {
     throw new Error("Gemini model not initialized. Call initialize() first.");
   }
 
@@ -156,9 +162,13 @@ Format this data in a tourist-friendly way:
 Respond with the formatted response only:`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text().trim();
+    const result = await genAI.models.generateContent({
+      model,
+      contents: prompt
+    });
+
+    const response = result.text;
+    return response?.trim() || "";
   } catch (error) {
     logger.error(`Failed to format response: ${error}`, "command");
     // Fallback formatting

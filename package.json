@@ -1,7 +1,7 @@
 {
     "name": "intelligent-assistant-console",
     "version": "1.0.0",
-    "description": "Simple web console simulation with Node.js + TypeScript backend",
+    "description": "web console simulation + TypeScript backend",
     "main": "dist/server.js",
     "scripts": {
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",

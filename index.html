@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Virtual Tourist Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="terminal-container">
+      <div class="terminal-header">
+        <div class="terminal-buttons">
+          <span class="btn btn-close"></span>
+          <span class="btn btn-min"></span>
+          <span class="btn btn-max"></span>
+        </div>
+        <div class="terminal-title">Virtual Tourist Assistant</div>
+      </div>
+
+      <div id="terminal-output" class="terminal-output" aria-live="polite"></div>
+
+      <div class="terminal-input-line">
+        <span class="prompt-label" id="prompt-label">How I can help you?</span>
+        <input
+          id="terminal-input"
+          class="terminal-input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Console input"
+        />
+      </div>
+    </div>
+
+    <script src="./main.js"></script>
+  </body>
+  </html>
+

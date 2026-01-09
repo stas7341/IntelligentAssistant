@@ -1,7 +1,6 @@
 import { extractIntent } from "./gemini";
 import {
   getContext,
-  setLocation,
   clearWaitingForClarification,
 } from "./conversationManager";
 import type { ValidatedQuery } from "../types/context";
@@ -17,19 +16,7 @@ export async function validateAndPrepare(
   const trimmed = query.trim();
   const context = getContext(userId);
 
-  // 🔁 Clarification response handling
-  if (context.waitingForClarification) {
-    const originalQuery = context.waitingForClarification.originalQuery;
-
-    if (context.waitingForClarification.missingFields.includes("location")) {
-      const locationMatch = extractExplicitLocation(trimmed);
-      if (locationMatch) {
-        setLocation(userId, locationMatch);
-        clearWaitingForClarification(userId);
-        return validateAndPrepare(originalQuery, userId);
-      }
-    }
-  }
+  // 🔁 Clarification response handling (location/radius logic removed)
 
   const intentResult = await extractIntent(trimmed, context);
 
@@ -41,16 +28,16 @@ export async function validateAndPrepare(
     context.userName = String(intentResult.extractedData.name);
   }
 
-  const missingFields = intentResult.missingFields.filter((field) => {
-    if (field === "location" && context.location?.city) return false;
-    if (field === "radius" && context.location?.radius) return false;
-    return true;
-  });
+  const missingFieldsRaw = intentResult.missingFields ?? [];
+  const missingFields = Array.isArray(missingFieldsRaw)
+    ? missingFieldsRaw.filter((field) => field === "category" || field === "timeOfDay")
+    : [];
 
   const extractedData = {
     ...intentResult.extractedData,
-    location: context.location?.city,
-    radius: context.location?.radius,
+    // Ensure category and timeOfDay are present if extracted
+    category: intentResult.extractedData?.category,
+    timeOfDay: intentResult.extractedData?.timeOfDay,
   };
 
   const validated: ValidatedQuery = {
@@ -70,21 +57,4 @@ export async function validateAndPrepare(
   return validated;
 }
 
-/**
- * Only extracts explicit "I'm in X" statements
- * Prevents false city detection
- */
-function extractExplicitLocation(text: string): {
-  city?: string;
-  radius?: number;
-} | null {
-  const cityMatch = text.match(/(?:i'?m|am)\s+(?:in|at)\s+([A-Za-z\s]{2,})/i);
-  const radiusMatch = text.match(/(\d+)\s*km/i);
 
-  if (!cityMatch && !radiusMatch) return null;
-
-  return {
-    city: cityMatch?.[1]?.trim(),
-    radius: radiusMatch ? Number(radiusMatch[1]) : undefined,
-  };
-}

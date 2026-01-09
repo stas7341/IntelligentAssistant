@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Live Jazz Night",
+    "date": "2026-01-09",
+    "location": "Shablul Jazz Club",
+    "city": "Tel Aviv",
+    "description": "Live jazz performance starting at 21:00"
+  },
+  {
+    "name": "Classical Music Concert",
+    "date": "2026-01-09",
+    "location": "Tel Aviv Museum",
+    "city": "Tel Aviv",
+    "description": "Orchestra concert at 20:00"
+  }
+]

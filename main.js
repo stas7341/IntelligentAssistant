@@ -61,7 +61,7 @@ function clearOutput() {
 }
 
 function printWelcome() {
-  appendLine("Welcome to your virtual tourist assistant", { className: "line-system" });
+  appendLine("Welcome to your virtual tourist assistant for Tel Aviv!", { className: "line-system" });
   appendLine(`User: ${userId}`, { className: "line-system" });
   appendLine("", { className: "line-system" });
   scrollToBottom();

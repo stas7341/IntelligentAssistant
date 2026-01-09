@@ -1,41 +1,32 @@
 import { logger } from "../logger";
 import type { PlacesEventsData } from "../types/context";
+import fs from "fs";
+import path from "path";
 
 export interface PlaceSearchParams {
-  location: string;
-  radius: number; // in km
-  type?: string; // e.g., "restaurant", "attraction", "hotel"
+  category?: string;
+  timeOfDay?: string;
 }
 
 /**
  * Placeholder for Google Places API integration
  * TODO: Implement actual Google Places API calls
  */
-export async function searchPlaces(params: PlaceSearchParams): Promise<PlacesEventsData["places"]> {
+export async function searchPlaces(
+  params: PlaceSearchParams
+): Promise<PlacesEventsData["places"]> {
   logger.log(
-    `[PLACEHOLDER] Searching places: ${params.location}, radius: ${params.radius}km, type: ${params.type || "any"}`,
+    `[DATASET] Searching places in Tel Aviv, category=${params.category ?? "any"}, timeOfDay=${params.timeOfDay ?? "any"}`,
     "command"
   );
 
-  // Placeholder implementation
-  // In the future, this will call Google Places API:
-  // - Use Google Places API to search for places
-  // - Filter by location and radius
-  // - Return structured place data
+  const filePath = path.join(__dirname, "../../data/places.telaviv.json");
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const places = JSON.parse(raw);
 
-  // For now, return empty array
-  // When implemented, return actual place data:
-  /*
-  return [
-    {
-      name: "Example Restaurant",
-      address: "123 Main St, Tel Aviv",
-      rating: 4.5,
-      types: ["restaurant", "food"],
-      location: { lat: 32.0853, lng: 34.7818 }
-    }
-  ];
-  */
-
-  return [];
+  return places.filter((p: any) => {
+    if (params.category && !p.types.includes(params.category)) return false;
+    if (params.timeOfDay && p.timeOfDay && p.timeOfDay !== params.timeOfDay) return false;
+    return true;
+  });
 }

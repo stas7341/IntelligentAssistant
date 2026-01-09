@@ -24,24 +24,22 @@ export interface CommandResult {
 const INTENT_HANDLERS: Record<
   string,
   (params: {
-    location: string;
-    radius: number;
     category?: string;
     date?: string;
   }) => Promise<PlacesEventsData>
 > = {
-  find_places: async ({ location, radius, category }) => ({
-    places: await searchPlaces({ location, radius, type: category }),
+  find_places: async ({ category }) => ({
+    places: await searchPlaces({ category }),
     events: [],
   }),
 
-  find_events: async ({ location, radius, date }) => ({
+  find_events: async ({ date }) => ({
     places: [],
-    events: await searchEvents({ location, radius, date }),
+    events: await searchEvents({ date }),
   }),
 
-  recommend: async ({ location, radius, category }) => ({
-    places: await searchPlaces({ location, radius, type: category }),
+  recommend: async ({ category }) => ({
+    places: await searchPlaces({ category }),
     events: [],
   }),
 };
@@ -71,7 +69,7 @@ export async function executeQuery(
       return {
         type: "output",
         lines: [
-          `Hello${name}! 👋 I can help you find places, events, or recommend something nearby.`,
+          `Hello${name}! 👋 I can help you find places, events, or recommend something in Tel Aviv.`,
         ],
       };
     }
@@ -84,7 +82,7 @@ export async function executeQuery(
       return {
         type: "output",
         lines: [
-          "I want to make sure I understood you correctly. Are you looking for places or events?",
+          "I want to make sure I understood you correctly. Are you looking for places or events in Tel Aviv? Please specify a category (e.g., restaurant, museum) and time of day (morning, afternoon, evening).",
         ],
       };
     }
@@ -98,7 +96,7 @@ export async function executeQuery(
 
       return {
         type: "output",
-        lines: [clarification],
+        lines: [clarification + " Please specify a category (e.g., restaurant, museum) and time of day (morning, afternoon, evening)."],
       };
     }
 
@@ -108,33 +106,28 @@ export async function executeQuery(
       return {
         type: "output",
         lines: [
-          "I can help with finding places or events nearby. What would you like to explore?",
+          "I can help with finding places or events in Tel Aviv. What would you like to explore?",
         ],
       };
     }
 
-    const location = validated.extractedData?.location;
-    const radius = validated.extractedData?.radius || 10;
-
     logger.log(
-      `Executing intent=${validated.intent}, location=${location}, radius=${radius}`,
+      `Executing intent=${validated.intent} (Tel Aviv)`,
       "command"
     );
 
     const data = await handler({
-      location,
-      radius,
       category: validated.extractedData?.category,
       date: validated.extractedData?.date,
     });
 
     // 🧯 Hallucination recovery — no fake results
-    if (!data.places.length && !data.events.length) {
+    if (!data.places?.length && !data.events?.length) {
       return {
         type: "output",
         lines: [
-          `I couldn’t find any matching results near ${location} within ${radius} km.`,
-          "You can try increasing the distance or choosing another activity.",
+          `I couldn’t find any matching results in Tel Aviv.`,
+          "You can try another activity.",
         ],
       };
     }

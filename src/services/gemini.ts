@@ -1,6 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 import { logger } from "../logger";
-import type { ConversationContext, IntentResult, PlacesEventsData } from "../types/context";
+import type {
+  ConversationContext,
+  IntentResult,
+  PlacesEventsData,
+} from "../types/context";
+
+/**
+ * Allowed intents – hard guardrail against hallucinations
+ */
+const ALLOWED_INTENTS = [
+  "find_places",
+  "find_events",
+  "recommend",
+  "greeting",
+  "introduction",
+  "smalltalk",
+  "user_identification",
+  "unknown",
+];
 
 let genAI: GoogleGenAI | null = null;
 
@@ -8,162 +26,205 @@ export function initialize(): void {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
 
   if (!apiKey) {
-    logger.error("GOOGLE_AI_API_KEY is not set in environment variables", "server");
-    throw new Error("GOOGLE_AI_API_KEY is required but not found in environment variables");
+    throw new Error("GOOGLE_AI_API_KEY is missing");
   }
 
-  try {
-    genAI = new GoogleGenAI({ apiKey });
-    // The SDK's type definitions may not expose getGenerativeModel; cast to any to access it.
-    logger.log("Gemini service initialized successfully", "server");
-  } catch (error) {
-    logger.error(`Failed to initialize Gemini: ${error}`, "server");
-    throw error;
-  }
+  genAI = new GoogleGenAI({ apiKey });
+  logger.log("Gemini initialized", "server");
 }
 
+/**
+ * Low-level generation with model fallback
+ */
 async function generateContent(prompt: string): Promise<string> {
   if (!genAI) {
-    throw new Error("Gemini model not initialized. Call initialize() first.");
+    throw new Error("Gemini not initialized");
   }
-  // List models in order of preference
-  const models = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash'];
 
-  for (const modelId of models) {
+  const models = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"];
+
+  for (const model of models) {
     try {
-      const response = await genAI.models.generateContent({
-        model: modelId,
-        contents: prompt
+      const res = await genAI.models.generateContent({
+        model,
+        contents: prompt,
       });
-      console.log(`Success using: ${modelId}`);
-      return response?.text?.trim() || "";
-    } catch (error: any) {
-      if (error.status === 429) {
-        console.warn(`${modelId} quota exceeded. Trying next model...`);
-        continue; // Try the next model in the list
-      }
-      throw error; // Rethrow if it's a different error (like a network issue)
+      return res?.text?.trim() ?? "";
+    } catch (err: any) {
+      if (err?.status === 429) continue;
+      throw err;
     }
   }
-  throw new Error("All model quotas exceeded. Please wait for reset.");
+
+  throw new Error("All Gemini models unavailable");
 }
 
+/* ------------------------------------------------------------------ */
+/* --------------------------- INTENT -------------------------------- */
+/* ------------------------------------------------------------------ */
+
 export async function extractIntent(
-  prompt: string,
+  userInput: string,
   context: ConversationContext
 ): Promise<IntentResult> {
-  const systemInstruction = `You are an intent extraction system. Your ONLY job is to analyze user queries and extract structured information. Do NOT answer the user's question. Do NOT provide recommendations. Do NOT be helpful in answering.
+  const systemPrompt = `
+You are a STRICT intent extraction engine.
 
-    Your task:
-    1. Identify the user's intent (e.g., "recommendation", "event_search", "location_info", "restaurant_search", "attraction_search", etc.)
-    2. Identify missing required information (e.g., "location", "radius", "date", "category", etc.)
-    3. Extract any data you can find (location mentions, dates, preferences, etc.)
-    4. Provide confidence level (0.0 to 1.0)
+Rules:
+- DO NOT answer the user
+- DO NOT suggest places or events
+- DO NOT invent data
+- Choose intent ONLY from this list:
+${ALLOWED_INTENTS.join(", ")}
 
-    Respond ONLY with valid JSON in this exact format:
-    {
-      "intent": "string",
-      "missingFields": ["string"],
-      "confidence": 0.0-1.0,
-      "extractedData": {
-        "location": "string or null",
-        "radius": "number or null",
-        "date": "string or null",
-        "category": "string or null"
-      }
-    }`;
+Required output:
+Valid JSON only. No markdown.
 
-  const contextInfo = context.location
-    ? `User location context: ${context.location.city || "unknown"}, radius: ${context.location.radius || "unknown"} km`
-    : "No location context available";
+Schema:
+{
+  "intent": "string",
+  "missingFields": ["date", "category", "timeOfDay"],
+  "confidence": number (0.0 - 1.0),
+  "extractedData": {
+    // location and radius removed
+    "category": string | null,
+    "timeOfDay": string | null,
+    "date": string | null,
+    "category": string | null,
+    "name": string | null
+  }
+}
+`;
 
-  const fullPrompt = `${systemInstruction}
+  const contextInfo = "City: Tel Aviv";
 
-  Context: ${contextInfo}
+  const prompt = `
+${systemPrompt}
 
-  User message: "${prompt}"
+Context:
+${contextInfo}
 
-  Respond with JSON only:`;
+User message:
+"${userInput}"
+`;
 
   try {
-    const response = await generateContent(fullPrompt);
+    const raw = await generateContent(prompt);
+    const parsed = safeParseJSON(raw);
 
-    // Extract JSON from response (handle markdown code blocks if present)
-    let jsonText = response;
-    if (jsonText.startsWith("```json")) {
-      jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    } else if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/```\n?/g, "").trim();
-    }
+    const intent =
+      ALLOWED_INTENTS.includes(parsed.intent) ? parsed.intent : "unknown";
 
-    const intentResult: IntentResult = JSON.parse(jsonText);
-
-    // Validate and normalize
-    if (!intentResult.intent) {
-      intentResult.intent = "unknown";
-    }
-    if (!Array.isArray(intentResult.missingFields)) {
-      intentResult.missingFields = [];
-    }
-    if (typeof intentResult.confidence !== "number") {
-      intentResult.confidence = 0.5;
-    }
-
-    logger.log(`Intent extracted: ${intentResult.intent}, missing: ${intentResult.missingFields.join(", ")}`, "command");
-    return intentResult;
-  } catch (error) {
-    logger.error(`Failed to extract intent: ${error}`, "command");
-    // Return fallback result
+    return {
+      intent,
+      missingFields: Array.isArray(parsed.missingFields)
+        ? parsed.missingFields
+        : [],
+      confidence:
+        typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+      extractedData: parsed.extractedData ?? {},
+    };
+  } catch (err) {
+    logger.error(`Intent extraction failed: ${err}`, "gemini");
     return {
       intent: "unknown",
-      missingFields: ["location"],
+      missingFields: [],
       confidence: 0.0,
       extractedData: {},
     };
   }
 }
 
-export async function generateClarification(missingFields: string[]): Promise<string> {
-  const prompt = `Generate a friendly, concise clarification question asking the user for the following missing information: ${missingFields.join(", ")}.
+/* ------------------------------------------------------------------ */
+/* ---------------------- CLARIFICATION ------------------------------ */
+/* ------------------------------------------------------------------ */
 
-Be conversational and helpful, but brief. Do not provide recommendations or answers yet. Just ask for the missing information.
+export async function generateClarification(params: {
+  intent: string;
+  missingFields: string[];
+}): Promise<string> {
+  const prompt = `
+You are asking a clarification question.
 
-Example format: "I'd be happy to help! Could you please tell me your location and how far you're willing to travel?"
+Intent: ${params.intent}
+Missing information: ${params.missingFields.join(", ")}
 
-Respond with only the clarification question, nothing else:`;
+Rules:
+- Ask ONE short, friendly question
+- Do NOT recommend anything
+- Do NOT guess missing data
+- Be conversational
 
-  return await generateContent(prompt);
+Example:
+"Could you tell me where you are and how far you're willing to travel?"
+
+Output only the question.
+`;
+
+  return generateContent(prompt);
 }
+
+/* ------------------------------------------------------------------ */
+/* ---------------------- RESPONSE FORMAT ---------------------------- */
+/* ------------------------------------------------------------------ */
 
 export async function formatResponse(
   data: PlacesEventsData,
-  query: string
+  userQuery: string
 ): Promise<string> {
-  const dataSummary = JSON.stringify(data, null, 2);
+  const safeData = JSON.stringify(data, null, 2);
 
-  const prompt = `You are a helpful tourist assistant. Format the following verified data as a friendly, informative response to the user's query.
+  const prompt = `
+You are formatting VERIFIED DATA ONLY.
 
-User's original query: "${query}"
+Rules:
+- Use ONLY the provided data
+  - Do NOT invent names, ratings, or times
+- If data is missing, do not mention it
+- Be friendly, concise, and clear
+
+User query:
+"${userQuery}"
 
 Verified data:
-${dataSummary}
+${safeData}
 
-Format this data in a tourist-friendly way:
-- Be conversational and helpful
-- Highlight key information (names, locations, ratings if available)
-- Organize information clearly
-- Keep it concise but informative
-- If there are multiple results, present them in a clear list format
-
-Respond with the formatted response only:`;
+Format the response.
+`;
 
   try {
     return await generateContent(prompt);
-  } catch (error) {
-    logger.error(`Failed to format response: ${error}`, "command");
-    // Fallback formatting
-    const places = data.places?.map((p) => `- ${p.name} (${p.address})`).join("\n") || "";
-    const events = data.events?.map((e) => `- ${e.name} on ${e.date} at ${e.location}`).join("\n") || "";
-    return `Here are some results:\n${places}\n${events}`.trim() || "I found some results, but couldn't format them properly.";
+  } catch {
+    // Deterministic fallback (no LLM)
+    const lines: string[] = [];
+
+    if (data.places?.length) {
+      lines.push("Places:");
+      data.places.forEach((p) =>
+        lines.push(`- ${p.name}${p.address ? ` (${p.address})` : ""}`)
+      );
+    }
+
+    if (data.events?.length) {
+      lines.push("Events:");
+      data.events.forEach((e) =>
+        lines.push(`- ${e.name}${e.date ? ` on ${e.date}` : ""}`)
+      );
+    }
+
+    return lines.join("\n") || "I found some results.";
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* ---------------------- UTIL --------------------------------------- */
+/* ------------------------------------------------------------------ */
+
+function safeParseJSON(text: string): any {
+  const cleaned = text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  return JSON.parse(cleaned);
 }

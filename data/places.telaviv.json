@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Port Said",
+    "address": "Har Sinai St 5, Tel Aviv",
+    "rating": 4.6,
+    "types": ["restaurant", "food"],
+    "city": "Tel Aviv"
+  },
+  {
+    "name": "Café Xoho",
+    "address": "Bograshov St 58, Tel Aviv",
+    "rating": 4.5,
+    "types": ["cafe"],
+    "city": "Tel Aviv"
+  }
+]

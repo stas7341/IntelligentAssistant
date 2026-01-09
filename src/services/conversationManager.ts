@@ -43,14 +43,6 @@ export function addQueryToHistory(
   context.previousQueries = context.previousQueries.slice(-50);
 }
 
-export function setLocation(
-  userId: string,
-  location: ConversationContext["location"]
-): void {
-  const context = getContextInternal(userId);
-  context.location = location;
-}
-
 export function clearWaitingForClarification(userId: string): void {
   const context = getContextInternal(userId);
   context.waitingForClarification = undefined;

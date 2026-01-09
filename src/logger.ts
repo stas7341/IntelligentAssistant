@@ -1,5 +1,5 @@
 export type LogLevel = "log" | "error" | "warn" | "info";
-export type LogSource = "server" | "request" | "command";
+export type LogSource = "server" | "request" | "command" | "gemini" | "queryValidator" | "conversationManager" | "googlePlaces" | "googleEvents" | "validator";
 
 export interface LogEntry {
   timestamp: string;

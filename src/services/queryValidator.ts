@@ -50,6 +50,13 @@ export async function validateAndPrepare(
     // Use Gemini to extract intent and missing fields
     const intentResult = await extractIntent(trimmed, context);
 
+    // Handle user-identification intent for personalization
+    if (intentResult.intent === "user_identification" && intentResult.extractedData?.name) {
+      // Save user's name in context for future personalization
+      context.userName = intentResult.extractedData.name.toString();
+      logger.log(`User identified: ${context.userName}`, "command");
+    }
+
     // Merge context location into missing fields check
     const missingFields = intentResult.missingFields.filter((field) => {
       if (field === "location" && context.location?.city) {

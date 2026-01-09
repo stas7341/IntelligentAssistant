@@ -3,7 +3,6 @@ import { logger } from "../logger";
 import type { ConversationContext, IntentResult, PlacesEventsData } from "../types/context";
 
 let genAI: GoogleGenAI | null = null;
-const model = "gemini-2.0-flash";
 
 export function initialize(): void {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
@@ -23,14 +22,36 @@ export function initialize(): void {
   }
 }
 
+async function generateContent(prompt: string): Promise<string> {
+  if (!genAI) {
+    throw new Error("Gemini model not initialized. Call initialize() first.");
+  }
+  // List models in order of preference
+  const models = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash'];
+
+  for (const modelId of models) {
+    try {
+      const response = await genAI.models.generateContent({
+        model: modelId,
+        contents: prompt
+      });
+      console.log(`Success using: ${modelId}`);
+      return response?.text?.trim() || "";
+    } catch (error: any) {
+      if (error.status === 429) {
+        console.warn(`${modelId} quota exceeded. Trying next model...`);
+        continue; // Try the next model in the list
+      }
+      throw error; // Rethrow if it's a different error (like a network issue)
+    }
+  }
+  throw new Error("All model quotas exceeded. Please wait for reset.");
+}
+
 export async function extractIntent(
   prompt: string,
   context: ConversationContext
 ): Promise<IntentResult> {
-  if (!model || !genAI) {
-    throw new Error("Gemini model not initialized. Call initialize() first.");
-  }
-
   const systemInstruction = `You are an intent extraction system. Your ONLY job is to analyze user queries and extract structured information. Do NOT answer the user's question. Do NOT provide recommendations. Do NOT be helpful in answering.
 
     Your task:
@@ -65,15 +86,10 @@ export async function extractIntent(
   Respond with JSON only:`;
 
   try {
-    const result = await genAI.models.generateContent({
-      model,
-      contents: fullPrompt
-    });
-
-    const response = result.text;
+    const response = await generateContent(fullPrompt);
 
     // Extract JSON from response (handle markdown code blocks if present)
-    let jsonText = response?.trim() || "";
+    let jsonText = response;
     if (jsonText.startsWith("```json")) {
       jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     } else if (jsonText.startsWith("```")) {
@@ -108,10 +124,6 @@ export async function extractIntent(
 }
 
 export async function generateClarification(missingFields: string[]): Promise<string> {
-  if (!model || !genAI) {
-    throw new Error("Gemini model not initialized. Call initialize() first.");
-  }
-
   const prompt = `Generate a friendly, concise clarification question asking the user for the following missing information: ${missingFields.join(", ")}.
 
 Be conversational and helpful, but brief. Do not provide recommendations or answers yet. Just ask for the missing information.
@@ -120,29 +132,13 @@ Example format: "I'd be happy to help! Could you please tell me your location an
 
 Respond with only the clarification question, nothing else:`;
 
-  try {
-    const result = await genAI.models.generateContent({
-      model,
-      contents: prompt
-    });
-
-    const response = result.text;
-    return response?.trim() || "";
-  } catch (error) {
-    logger.error(`Failed to generate clarification: ${error}`, "command");
-    // Fallback clarification
-    return `I'd be happy to help! Could you please provide: ${missingFields.join(", ")}?`;
-  }
+  return await generateContent(prompt);
 }
 
 export async function formatResponse(
   data: PlacesEventsData,
   query: string
 ): Promise<string> {
-  if (!model || !genAI) {
-    throw new Error("Gemini model not initialized. Call initialize() first.");
-  }
-
   const dataSummary = JSON.stringify(data, null, 2);
 
   const prompt = `You are a helpful tourist assistant. Format the following verified data as a friendly, informative response to the user's query.
@@ -162,13 +158,7 @@ Format this data in a tourist-friendly way:
 Respond with the formatted response only:`;
 
   try {
-    const result = await genAI.models.generateContent({
-      model,
-      contents: prompt
-    });
-
-    const response = result.text;
-    return response?.trim() || "";
+    return await generateContent(prompt);
   } catch (error) {
     logger.error(`Failed to format response: ${error}`, "command");
     // Fallback formatting

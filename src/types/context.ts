@@ -1,5 +1,6 @@
 export interface ConversationContext {
   userId?: string;
+  userName?: string; // For personalization
   location?: {
     city?: string;
     coordinates?: {
@@ -17,6 +18,7 @@ export interface ConversationContext {
     missingFields: string[];
     originalQuery: string;
   };
+  createdAt?: string; // ISO timestamp when conversation started
 }
 
 export interface IntentResult {

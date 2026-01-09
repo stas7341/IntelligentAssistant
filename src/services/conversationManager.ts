@@ -2,16 +2,49 @@ import type { ConversationContext } from "../types/context";
 
 // In-memory storage for conversation contexts
 // In production, this should be replaced with a database or session store
+
 const conversations = new Map<string, ConversationContext>();
 
+function cleanupExpiredConversations() {
+  const now = new Date();
+  const oneHourMs = 60 * 60 * 1000;
+  for (const [userId, context] of conversations.entries()) {
+    if (context.createdAt) {
+      const created = new Date(context.createdAt);
+      if (now.getTime() - created.getTime() > oneHourMs) {
+        conversations.delete(userId);
+      }
+    }
+  }
+}
+
 function getOrCreateContext(userId: string): ConversationContext {
-  if (!conversations.has(userId)) {
+  cleanupExpiredConversations();
+  const now = new Date();
+  const oneHourMs = 60 * 60 * 1000;
+  const existing = conversations.get(userId);
+  if (existing) {
+    if (existing.createdAt) {
+      const created = new Date(existing.createdAt);
+      if (now.getTime() - created.getTime() > oneHourMs) {
+        // Expire old conversation
+        conversations.set(userId, {
+          userId,
+          previousQueries: [],
+          createdAt: now.toISOString(),
+        });
+        return conversations.get(userId)!;
+      }
+    }
+    return existing;
+  } else {
     conversations.set(userId, {
       userId,
       previousQueries: [],
+      createdAt: now.toISOString(),
     });
+    return conversations.get(userId)!;
   }
-  return conversations.get(userId)!;
 }
 
 export function getContext(userId: string): ConversationContext {

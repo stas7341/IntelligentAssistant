@@ -29,6 +29,17 @@ export async function executeQuery(raw: string, userId: string): Promise<Command
     // Validate and prepare the query using Gemini
     const validatedQuery = await validateAndPrepare(trimmed, userId);
 
+    // Check for non-actionable intents (greeting, introduction, chitchat, etc.)
+    const nonActionableIntents = ["greeting", "introduction", "chitchat", "smalltalk", "user_identification"];
+    if (nonActionableIntents.includes(validatedQuery.intent)) {
+      return {
+        type: "output",
+        lines: [
+          "Hello! How can I assist you today? You can ask me to find places, events, or get recommendations.",
+        ],
+      };
+    }
+
     // Add query to history, use shared memory to support scaling
     addQueryToHistory(userId, trimmed, validatedQuery.intent);
 

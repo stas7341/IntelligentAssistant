@@ -24,7 +24,7 @@ const ALLOWED_INTENTS = [
 let genAI: GoogleGenAI | null = null;
 
 export function initialize(): void {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY || "AIzaSyDw4IhYqv69RrTTa9ntSjm4U8Q8VBJRwXM";
 
   if (!apiKey) {
     throw new Error("GOOGLE_AI_API_KEY is missing");

@@ -43,6 +43,18 @@ export function addQueryToHistory(
   context.previousQueries = context.previousQueries.slice(-50);
 }
 
+export function setWaitingForClarification(
+  userId: string,
+  missingFields: string[],
+  originalQuery: string
+): void {
+  const context = getContextInternal(userId);
+  context.waitingForClarification = {
+    missingFields,
+    originalQuery,
+  };
+}
+
 export function clearWaitingForClarification(userId: string): void {
   const context = getContextInternal(userId);
   context.waitingForClarification = undefined;

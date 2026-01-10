@@ -4,6 +4,7 @@ import {
   addQueryToHistory,
   clearWaitingForClarification,
   getContext,
+  setWaitingForClarification,
 } from "./services/conversationManager";
 import { searchPlaces } from "./services/googlePlaces";
 import { searchEvents } from "./services/googleEvents";
@@ -21,12 +22,10 @@ export interface CommandResult {
  * Intent → data source routing
  * Prevents unnecessary API calls and hallucinations
  */
-const INTENT_HANDLERS: Record<
-  string,
-  (params: {
-    category?: string;
-    date?: string;
-  }) => Promise<PlacesEventsData>
+const INTENT_HANDLERS: Record<string, (params: {
+  category?: string;
+  date?: string;
+}) => Promise<PlacesEventsData>
 > = {
   find_places: async ({ category }) => ({
     places: await searchPlaces({ category }),
@@ -49,33 +48,41 @@ const NON_ACTIONABLE_INTENTS = [
   "introduction",
   "smalltalk",
   "chitchat",
+  "gratitude",
   "user_identification",
 ];
 
-export async function executeQuery(
-  raw: string,
+export async function executeQuery(raw: string,
   userId: string
 ): Promise<CommandResult> {
-  const trimmed = raw.trim();
-  if (!trimmed) return { type: "none" };
+  const query = raw.trim();
+  if (!query)
+    return { type: "none" };
 
   try {
-    const validated = await validateAndPrepare(trimmed, userId);
+    const validated = await validateAndPrepare(query, userId);
     const context = getContext(userId);
 
     // 🟢 Handle smalltalk / greetings
     if (NON_ACTIONABLE_INTENTS.includes(validated.intent)) {
-      const name = context.userName ? ` ${context.userName}` : "";
-      return {
-        type: "output",
-        lines: [
-          `Hello${name}! 👋 I can help you find places, events, or recommend something in Tel Aviv.`,
-        ],
-      };
+      if (validated.intent === "gratitude" || query.toLowerCase().includes("thank")) {
+        return {
+          type: "output",
+          lines: ["You're welcome!"],
+        };
+      } else {
+        const name = context.userName ? ` ${context.userName}` : "";
+        return {
+          type: "output",
+          lines: [
+            `Hello${name}! 👋 I can help you find places, events, or recommend something in Tel Aviv.`,
+          ],
+        };
+      }
     }
 
     // Store history
-    addQueryToHistory(userId, trimmed, validated.intent);
+    addQueryToHistory(userId, query, validated.intent);
 
     // 🟡 Low confidence → ask clarification
     if (validated.confidence < 0.5) {
@@ -89,6 +96,8 @@ export async function executeQuery(
 
     // 🟠 Missing required data
     if (!validated.isComplete && validated.missingFields.length > 0) {
+      setWaitingForClarification(userId, validated.missingFields, query);
+
       const clarification = await generateClarification({
         intent: validated.intent,
         missingFields: validated.missingFields,
@@ -96,13 +105,13 @@ export async function executeQuery(
 
       return {
         type: "output",
-        lines: [clarification + " Please specify a category (e.g., restaurant, museum) and time of day (morning, afternoon, evening)."],
+        lines: [clarification + " Please specify."],
       };
     }
 
-    // 🔴 Unsupported intent
     const handler = INTENT_HANDLERS[validated.intent];
     if (!handler) {
+      // 🔴 Unsupported intent
       return {
         type: "output",
         lines: [
@@ -132,7 +141,7 @@ export async function executeQuery(
       };
     }
 
-    const formatted = await formatResponse(data, trimmed);
+    const formatted = await formatResponse(data, query);
 
     clearWaitingForClarification(userId);
 

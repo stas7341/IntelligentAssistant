@@ -16,6 +16,7 @@ const ALLOWED_INTENTS = [
   "greeting",
   "introduction",
   "smalltalk",
+  "gratitude",
   "user_identification",
   "unknown",
 ];
@@ -77,6 +78,27 @@ Rules:
 - Choose intent ONLY from this list:
 ${ALLOWED_INTENTS.join(", ")}
 
+Intent descriptions:
+- greeting: Simple hello or introduction without specific requests
+- user_identification: User introducing themselves (e.g., "I'm John", "my name is Sarah")
+- find_places: Looking for places like restaurants, cafes, museums
+- find_events: Looking for events, concerts, performances
+- recommend: Asking for recommendations or suggestions
+- smalltalk/chitchat: Casual conversation- gratitude: Expressions of thanks (thank you, thanks, etc.)- unknown: If unclear
+
+Field specifications:
+- timeOfDay: ONLY "morning", "afternoon", or "evening" (null if not specified)
+- category: Place type like "restaurant", "cafe", "museum" (null if not specified)
+- date: ISO date string like "2026-01-10" (null if not specified)
+- name: User's name when introducing themselves (null otherwise)
+
+Examples:
+- "Hi, I'm John" → intent: "user_identification", extractedData: {"name": "John"}
+- "Find restaurants in the evening" → intent: "find_places", extractedData: {"category": "restaurant", "timeOfDay": "evening"}
+- "What's happening today?" → intent: "find_events", extractedData: {"date": "2026-01-10"}
+- "Thank you" → intent: "gratitude"
+- "Recommend a place to eat" → intent: "recommend", extractedData: {"category": "restaurant"}
+
 Required output:
 Valid JSON only. No markdown.
 
@@ -86,17 +108,17 @@ Schema:
   "missingFields": ["date", "category", "timeOfDay"],
   "confidence": number (0.0 - 1.0),
   "extractedData": {
-    // location and radius removed
     "category": string | null,
     "timeOfDay": string | null,
     "date": string | null,
-    "category": string | null,
     "name": string | null
   }
 }
 `;
 
-  const contextInfo = "City: Tel Aviv";
+  const contextInfo = `City: Tel Aviv
+Current date: ${new Date().toISOString().split('T')[0]}
+User name: ${context.userName || 'unknown'}`;
 
   const prompt = `
 ${systemPrompt}
@@ -136,8 +158,45 @@ User message:
 }
 
 /* ------------------------------------------------------------------ */
-/* ---------------------- CLARIFICATION ------------------------------ */
+/* ---------------------- MISSING DATA EXTRACTION ------------------- */
 /* ------------------------------------------------------------------ */
+
+export async function extractMissingData(
+  userInput: string,
+  missingFields: string[]
+): Promise<Record<string, any>> {
+  const prompt = `
+You are extracting missing information from a user's clarification response.
+
+Missing fields needed: ${missingFields.join(", ")}
+
+Field specifications:
+- timeOfDay: ONLY "morning", "afternoon", or "evening"
+- category: Place type like "restaurant", "cafe", "museum"
+- date: ISO date string like "2026-01-10"
+
+User's clarification response:
+"${userInput}"
+
+Extract the values for the missing fields. Output valid JSON only.
+
+Schema:
+{
+  "category": string | null,
+  "timeOfDay": string | null,
+  "date": string | null
+}
+`;
+
+  try {
+    const raw = await generateContent(prompt);
+    const parsed = safeParseJSON(raw);
+    return parsed;
+  } catch (err) {
+    logger.error(`Missing data extraction failed: ${err}`, "gemini");
+    return {};
+  }
+}
 
 export async function generateClarification(params: {
   intent: string;

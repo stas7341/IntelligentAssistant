@@ -1,14 +1,28 @@
 [
   {
     "name": "Live Jazz Night",
-    "date": "2026-01-09",
+    "date": "2026-01-10",
     "location": "Shablul Jazz Club",
     "city": "Tel Aviv",
     "description": "Live jazz performance starting at 21:00"
   },
   {
     "name": "Classical Music Concert",
-    "date": "2026-01-09",
+    "date": "2026-01-10",
+    "location": "Tel Aviv Museum",
+    "city": "Tel Aviv",
+    "description": "Orchestra concert at 20:00"
+  },
+  {
+    "name": "Live Jazz Night",
+    "date": "2026-01-11",
+    "location": "Shablul Jazz Club",
+    "city": "Tel Aviv",
+    "description": "Live jazz performance starting at 21:00"
+  },
+  {
+    "name": "Classical Music Concert",
+    "date": "2026-01-11",
     "location": "Tel Aviv Museum",
     "city": "Tel Aviv",
     "description": "Orchestra concert at 20:00"

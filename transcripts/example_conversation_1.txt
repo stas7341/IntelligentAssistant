@@ -1,0 +1,9 @@
+
+user: Hi, my name is Stas
+Hello Stas! 👋 I can help you find places, events, or recommend something in Tel Aviv.
+user: yes, I'm looking for interesting place to go today at evening
+Here are a couple of places you might enjoy this evening:
+*   **Port Said** is a restaurant and food spot located at Har Sinai St 5, Tel Aviv. It has a rating of 4.6.
+*   **Café Xoho** is a cafe at Bograshov St 58, Tel Aviv, with a rating of 4.5
+user: Thanks
+You're welcome!

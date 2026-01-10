@@ -1,0 +1,11 @@
+
+user: Hi!
+Hello! 👋 I can help you find places, events, or recommend something in Tel Aviv.
+user: my name is Stas
+Hello Stas! 👋 I can help you find places, events, or recommend something in Tel Aviv.
+user: any interesting events today any time?
+Here are the events happening today:
+*   **Live Jazz Night** at Shablul Jazz Club in Tel Aviv, starting at 21:00.
+*   **Classical Music Concert** at Tel Aviv Museum in Tel Aviv, at 20:00.
+user: Thanks
+You're welcome!
